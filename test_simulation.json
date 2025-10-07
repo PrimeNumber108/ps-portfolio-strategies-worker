@@ -1,0 +1,47 @@
+{
+    "users":{
+        "user1": {
+            "amount": 1,
+            "strategy": "wash"
+        },
+        "user2": {
+            "amount": 1,
+            "strategy": "pmm"
+            
+        },
+        "array_users_1": {
+            "amount": 2,
+            "strategy": "only-sell"
+        },
+        "array_users_2": {
+            "amount": 2,
+            "strategy": "only-buy"
+        }
+    },
+    "market-input":{
+        "symbols":{
+            "BTCUSDT": {
+                "type":"spot"
+            },
+            "ETHUSDT": {
+                "type":"PERP"
+            }
+        },
+        "view":{
+            "timeframe": "1h",
+            "indicators": ["sma","ema","rsi","macd"],
+            "orderbook": true,
+            "trades": true,
+            "depth": true
+        }
+    
+    },
+    "player":{
+        "initial_balance": 10000,
+        "leverage": 1,
+        "trade_size": 0.1,
+        "max_open_trades": 5,
+        "slippage": 0.1,
+        "commission": 0.1
+    }
+}
