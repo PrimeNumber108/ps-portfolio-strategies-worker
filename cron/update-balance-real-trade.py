@@ -50,7 +50,6 @@ def fetch_running_real_sessions(page: int = 1, limit: int = 10000) -> list:
         logger_access.info(f"No real sessions data returned: {resp}")
         return []
     
-    print('resp running: ',resp)
     return resp.get("data", [])
 
 
@@ -228,12 +227,10 @@ def update_session_balance(session: Dict[str, Any]) -> bool:
             logger_error.error(f"No encrypted API secret for {session_key}")
             return False
         
-        print('api_secret_encrypted: ',api_secret_encrypted)
         logger_access.info(f"Processing real trade session: {session_key}")
         
         # Decode the secret and get exchange details
         decoded_creds = decode_api_secret(session_key, api_secret_encrypted)
-        print('decoded_creds: ',decoded_creds)
         if not decoded_creds:
             logger_error.error(f"Failed to decode credentials for {session_key}")
             return False
