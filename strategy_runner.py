@@ -9,21 +9,24 @@ import json
 import os
 import importlib.util
 import traceback
+import runpy
 from pathlib import Path
 from logger import logger_access, logger_error
 from utils import get_arg
 from constants import set_constants, get_constants
+import io
+import base64
+from contextlib import redirect_stdout, redirect_stderr
 
 def configure_matplotlib_for_notebook():
     """Configure matplotlib for notebook execution (plots will be embedded in notebook)"""
     try:
         import matplotlib
-        import matplotlib.pyplot as plt
         
-        # Set matplotlib backend to Agg (non-interactive) for headless execution
         matplotlib.use('Agg')
         
-        # Configure default parameters for better quality
+        import matplotlib.pyplot as plt
+        
         plt.rcParams['figure.dpi'] = 150
         plt.rcParams['savefig.dpi'] = 150
         plt.rcParams['savefig.bbox'] = 'tight'
@@ -199,25 +202,100 @@ def execute_notebook_file(notebook_path, config):
         logger_access.error(f"📋 Traceback: {traceback.format_exc()}")
         return False
 
+def create_notebook_from_script_output(script_path, captured_output, figures_list):
+    """Create an executed notebook from script output and figures"""
+    try:
+        import nbformat
+        
+        nb = nbformat.v4.new_notebook()
+        
+        nb.cells.append(nbformat.v4.new_markdown_cell(f"# Execution Results: {script_path.name}"))
+        
+        if captured_output.strip():
+            output_cell = nbformat.v4.new_code_cell(
+                source=f"# Output from {script_path.name}\n# See results below:"
+            )
+            
+            output = nbformat.v4.new_output(
+                output_type='stream',
+                name='stdout',
+                text=captured_output
+            )
+            output_cell.outputs.append(output)
+            nb.cells.append(output_cell)
+        
+        for idx, fig_data in enumerate(figures_list):
+            try:
+                img_cell = nbformat.v4.new_code_cell()
+                
+                display_output = nbformat.v4.new_output(
+                    output_type='display_data',
+                    data={
+                        'image/png': fig_data
+                    }
+                )
+                img_cell.outputs.append(display_output)
+                nb.cells.append(img_cell)
+            except Exception as e:
+                logger_access.error(f"⚠️ Error adding figure {idx}: {e}")
+        
+        script_name = script_path.name
+        if script_name.endswith('.py'):
+            notebook_name = script_name[:-3] + '.ipynb'
+        else:
+            notebook_name = script_name + '.ipynb'
+        
+        output_path = script_path.parent / f"executed_{notebook_name}"
+        
+        if output_path.exists():
+            output_path.unlink()
+            logger_access.info(f"🗑️ Removed existing executed file: {output_path}")
+        
+        with open(output_path, 'w') as f:
+            nbformat.write(nb, f)
+        
+        logger_access.info(f"✅ Executed notebook created: {output_path}")
+        return True
+        
+    except Exception as e:
+        logger_access.error(f"❌ Error creating notebook: {e}")
+        logger_access.error(f"📋 Traceback: {traceback.format_exc()}")
+        return False
+
+def extract_figures_from_module(module):
+    """Extract all matplotlib figures and convert to base64"""
+    figures_list = []
+    try:
+        import matplotlib.pyplot as plt
+        
+        figs = plt.get_fignums()
+        for fig_num in figs:
+            try:
+                fig = plt.figure(fig_num)
+                buf = io.BytesIO()
+                fig.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+                buf.seek(0)
+                img_base64 = base64.b64encode(buf.read()).decode('utf-8')
+                figures_list.append(img_base64)
+                plt.close(fig)
+            except Exception as fig_err:
+                logger_access.error(f"⚠️ Error extracting figure {fig_num}: {fig_err}")
+    except Exception as e:
+        logger_access.error(f"⚠️ Error extracting figures: {e}")
+    
+    return figures_list
+
 def execute_strategy_file(script_path, config):
     """Execute a single strategy script with the given configuration"""
     try:
         logger_access.info(f"🚀 Executing strategy file: {script_path}")
         
-        # Configure matplotlib for notebook execution
         configure_matplotlib_for_notebook()
         
-        # Load the strategy module dynamically
-        module_name = f"strategy_module_{script_path.stem}"
-        spec = importlib.util.spec_from_file_location(module_name, script_path)
-        strategy_module = importlib.util.module_from_spec(spec)
-        
-        # Add the strategy directory to sys.path so imports work
         strategy_dir = str(script_path.parent)
         if strategy_dir not in sys.path:
             sys.path.insert(0, strategy_dir)
         
-        ## set argv
         args = sys.argv[1:]
         if len(args) >= 7:
             try:
@@ -228,41 +306,49 @@ def execute_strategy_file(script_path, config):
 
         if config.get('paper_trading', False):
             logger_access.info("📝 Paper trading mode enabled")
-             
-        # Execute the module
+        
+        if config.get('continuous_mode', False):
+            logger_access.info("🔄 Running strategy in continuous mode (may run indefinitely)")
+        
+        captured_output = io.StringIO()
+        captured_error = io.StringIO()
+        
         try:
-            spec.loader.exec_module(strategy_module)
-        except Exception as e:
-            logger_access.error(f"❌ Failed to load strategy module: {e}")
-            logger_access.error(f"📋 Traceback: {traceback.format_exc()}")
-
-        # Look for main function or strategy class
-        if hasattr(strategy_module, 'main'):
-            logger_access.info("📞 Calling main() function...")
+            with redirect_stdout(captured_output), redirect_stderr(captured_error):
+                runpy.run_path(str(script_path), run_name="__main__")
             
-            # Check if this is paper trading mode
-            if config.get('paper_trading', False):
-                logger_access.info("📝 Running strategy in paper trading mode")
+            logger_access.info(f"✅ Strategy file execution completed")
             
-            # Check if this is continuous mode
-            if config.get('continuous_mode', False):
-                logger_access.info("🔄 Running strategy in continuous mode (may run indefinitely)")
+            output_text = captured_output.getvalue()
+            error_text = captured_error.getvalue()
+            if error_text:
+                output_text += "\n\n--- Errors/Warnings ---\n" + error_text
             
-            try:
-                result = strategy_module.main()
-                logger_access.info(f"✅ Strategy file execution completed with result: {result}")
-                return True
-            except KeyboardInterrupt:
-                logger_access.info("🛑 Strategy execution interrupted by user")
-                return True
-            except Exception as e:
-                logger_access.error(f"❌ Strategy main() function failed: {e}")
-                logger_access.error(f"📋 Traceback: {traceback.format_exc()}")
-                return False
-        else:
-            logger_access.info("⚠️  No main() function found, executing module directly...")
-            logger_access.info("✅ Strategy module executed successfully")
+            figures = extract_figures_from_module(None)
+            
+            if output_text or figures:
+                create_notebook_from_script_output(script_path, output_text, figures)
+            
             return True
+            
+        except KeyboardInterrupt:
+            logger_access.info("🛑 Strategy execution interrupted by user")
+            return True
+        except Exception as e:
+            logger_access.error(f"❌ Strategy execution failed: {e}")
+            logger_access.error(f"📋 Traceback: {traceback.format_exc()}")
+            
+            output_text = captured_output.getvalue()
+            error_text = captured_error.getvalue()
+            if error_text:
+                output_text += "\n\n--- Errors/Warnings ---\n" + error_text
+            
+            figures = extract_figures_from_module(None)
+            
+            if output_text or figures:
+                create_notebook_from_script_output(script_path, output_text, figures)
+            
+            return False
             
     except Exception as e:
         logger_access.error(f"❌ Error executing strategy file {script_path}: {e}")
