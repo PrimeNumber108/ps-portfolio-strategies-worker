@@ -49,7 +49,6 @@ def load_config(config_path):
         return config
     except Exception as e:
         logger_access.error(f"❌ Error loading config: {e}")
-        logger_access.error(f"📋 Traceback: {traceback.format_exc()}")
         return None
 
 def find_strategy_directory(strategy_name):
@@ -196,7 +195,7 @@ def execute_notebook_file(notebook_path, config):
         
     except Exception as e:
         logger_access.error(f"❌ Error executing notebook {notebook_path}: {e}")
-        logger_access.error(f"📋 Traceback: {traceback.format_exc()}")
+        logger_access.error(f"📋 Traceback:\n{traceback.format_exc()}")
         return False
 
 def execute_strategy_file(script_path, config):
@@ -220,10 +219,7 @@ def execute_strategy_file(script_path, config):
         ## set argv
         args = sys.argv[1:]
         if len(args) >= 7:
-            try:
-                set_constants(args)
-            except Exception as e:
-                logger_access.error(f"⚠️ Failed to set constants from args: {e}")
+            set_constants(args)
         logger_access.info(f"Parameters zzs: {args}")
 
         if config.get('paper_trading', False):
@@ -234,7 +230,7 @@ def execute_strategy_file(script_path, config):
             spec.loader.exec_module(strategy_module)
         except Exception as e:
             logger_access.error(f"❌ Failed to load strategy module: {e}")
-            logger_access.error(f"📋 Traceback: {traceback.format_exc()}")
+            logger_access.error(f"📋 Traceback:\n{traceback.format_exc()}")
 
         # Look for main function or strategy class
         if hasattr(strategy_module, 'main'):
@@ -257,7 +253,7 @@ def execute_strategy_file(script_path, config):
                 return True
             except Exception as e:
                 logger_access.error(f"❌ Strategy main() function failed: {e}")
-                logger_access.error(f"📋 Traceback: {traceback.format_exc()}")
+                logger_access.error(f"📋 Traceback:\n{traceback.format_exc()}")
                 return False
         else:
             logger_access.info("⚠️  No main() function found, executing module directly...")
@@ -266,7 +262,7 @@ def execute_strategy_file(script_path, config):
             
     except Exception as e:
         logger_access.error(f"❌ Error executing strategy file {script_path}: {e}")
-        logger_access.error(f"📋 Traceback: {traceback.format_exc()}")
+        logger_access.error(f"📋 Traceback:\n{traceback.format_exc()}")
         return False
 
 def execute_all_strategies(strategy_dir, config):
@@ -346,7 +342,6 @@ def main():
         args = sys.argv[1:]
         
         if args and args[0].endswith('.json'):
-            # Config file path passed as first argument
             config_path = args[0]
             if os.path.exists(config_path):
                 loaded_config = load_config(config_path)
@@ -365,29 +360,28 @@ def main():
                 logger_access.error(f"❌ Config file not found: {config_path}")
                 return 1
         elif len(args) >= 7:
-            # Legacy: 7+ command-line arguments
-            # set_constants expects indices [1-7], so we need to prepend a dummy element
-            try:
-                set_constants(['dummy'] + args)
-                params = get_constants()
-            except IndexError as e:
-                logger_access.error(f"❌ Failed to parse CLI params (IndexError): {e}")
-                logger_access.error(f"   Expected at least 7 command-line arguments, got {len(args)}")
-                return 1
+            set_constants(args)
+            params = get_constants()
         else:
             logger_access.error(f"❌ Invalid arguments: expected config file path or 7+ arguments")
             logger_access.error(f"   Received {len(args)} arguments: {args}")
             return 1
+    except IndexError as e:
+        logger_access.error(f"❌ Failed to parse CLI params (IndexError): {e}")
+        logger_access.error(f"   Expected at least 7 command-line arguments")
+        logger_access.error(f"📋 Traceback:\n{traceback.format_exc()}")
+        return 1
     except Exception as e:
         logger_access.error(f"❌ Failed to parse CLI params: {e}")
-        logger_access.error(f"📋 Traceback: {traceback.format_exc()}")
+        logger_access.error(f"📋 Traceback:\n{traceback.format_exc()}")
         return 1
 
     if not params:
         logger_access.error(f"❌ Failed to initialize parameters")
         return 1
 
-    logger_access.info("\n" + "=" * 50)
+    logger_access.info("
+" + "=" * 50)
     logger_access.info("🌍 Hello World from Python Strategy Runner!")
     logger_access.info("=" * 50)
 
@@ -414,15 +408,19 @@ def main():
     if strategy_dir and strategy_dir.exists():
         success = execute_all_strategies(strategy_dir, params)
         if success:
-            logger_access.info("\n✅ All strategy files executed successfully!")
+            logger_access.info("
+✅ All strategy files executed successfully!")
             return 0
         else:
-            logger_access.info("\n❌ Strategy execution failed!")
+            logger_access.info("
+❌ Strategy execution failed!")
             return 1
     else:
-        logger_access.info(f"\n⚠️  Strategy directory not found, running in demo mode")
+        logger_access.info(f"
+⚠️  Strategy directory not found, running in demo mode")
 
-    logger_access.info("\n🎉 Demo execution completed successfully!")
+    logger_access.info("
+🎉 Demo execution completed successfully!")
     logger_access.info("=" * 50)
     return 0
 

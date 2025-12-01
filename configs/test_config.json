@@ -1,0 +1,12 @@
+{
+  "session_key": "test_session_123",
+  "strategy_name": "NonExistentStrategy",
+  "strategy_id": 30,
+  "exchange": "bybit",
+  "api_key": "",
+  "api_secret": "",
+  "passphrase": "",
+  "paper_trading": false,
+  "initial_balance": 10000.0,
+  "mode": "backtest"
+}

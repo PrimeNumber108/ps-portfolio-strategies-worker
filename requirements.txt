@@ -36,3 +36,5 @@ filterpy
 mplfinance
 quantstats
 #fetch_data_binance
+
+##pip install matplotlib
