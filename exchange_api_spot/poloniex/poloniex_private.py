@@ -16,21 +16,23 @@ GOLANG_API_BASE_URL = "http://localhost:8083"
 
 class PoloniexPrivate:
     def __init__(self,  symbol, quote = 'USDT', api_key = '', secret_key='', passphrase='', session_key=''):
-        self._symbol = None
-        self._quote = None
-        self.symbol = symbol
-        self.quote = quote
-        self.base = symbol
-        self.symbol_ex = f'{symbol}_{self.quote}' #BTC_USDT
-        self.symbol_redis = f'{symbol}_{quote}'.upper()
         self.api_key = api_key
         self.secret_key = secret_key
         self.base_url = base_url.rstrip("/")
-        self.r = r
         self._request = Request(api_key, secret_key, url=base_url)
+        self.r = r
+        
+        self._symbol = None
+        self._quote = None
         self.qty_scale = 0
         self.price_scale = 0
-        self.session_key = session_key or str(uuid.uuid4())  # Generate unique session key if not provided
+        self.session_key = session_key or str(uuid.uuid4())
+        
+        self.symbol = symbol
+        self.quote = quote
+        self.base = symbol
+        self.symbol_ex = f'{self.symbol}_{self.quote}' #BTC_USDT
+        self.symbol_redis = f'{self.symbol}_{self.quote}'.upper()
         
         
 
@@ -59,7 +61,7 @@ class PoloniexPrivate:
     def update_symbol_data(self):
         """Recalculate symbol_ex, symbol_redis, and scales when symbol/quote changes."""
         if self._symbol and self._quote:
-            self.symbol_ex = f"{self._symbol}{self._quote}"
+            self.symbol_ex = f"{self._symbol}_{self._quote}"
             self.symbol_redis = f"{self._symbol}_{self._quote}".upper()
 
             # Redis check
